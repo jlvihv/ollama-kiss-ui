@@ -28,3 +28,17 @@ export interface ModelInfo {
     quantization_level: string;
   };
 }
+
+export interface AppSetting {
+  id: string;
+  url: string;
+  defaultModel: ModelInfo | undefined;
+  currentChat: Chat | undefined;
+  modelList: ModelInfo[];
+}
+
+export interface AppSettingDB {
+  id: string;
+  url: string;
+  defaultModel: ModelInfo | undefined;
+}

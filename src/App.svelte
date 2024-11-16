@@ -1,25 +1,41 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { db } from "./lib/db";
-    import type { Chat, Message } from "./lib/types";
-    import { appState } from "./lib/store.svelte";
+    import type { Chat, Message, ModelInfo } from "./lib/types";
+    import { alertMessage, appSetting } from "./lib/store.svelte";
     import { marked } from "marked";
     import DOMPurify from "dompurify";
     import { fetchModels } from "./lib/fetch";
+    import Alert from "./lib/Alert.svelte";
 
     let message = $state("");
     let chats: Chat[] = $state([]);
     let loading = $state(false);
-    let inputRef: HTMLInputElement;
+    let inputRef: HTMLInputElement | undefined = $state();
 
     onMount(async () => {
+        // 从数据库中获取配置
+        const setting = await db.setting.get("setting");
+        if (setting) {
+            appSetting.defaultModel =
+                setting.defaultModel ?? appSetting.defaultModel;
+            appSetting.url = setting.url ?? appSetting.url;
+        }
         // 获取模型列表
-        appState.modelList = await fetchModels();
+        appSetting.modelList = await fetchModels();
+        // 获取模型列表之后，再检查一下默认模型是否存在
+        if (
+            !appSetting.modelList.some(
+                (model) => model.name === appSetting.defaultModel?.name,
+            )
+        ) {
+            appSetting.defaultModel = appSetting.modelList[0];
+        }
         chats = await db.chats.orderBy("updatedAt").reverse().toArray();
         if (chats.length === 0) {
             await createNewChat();
         } else {
-            appState.currentChat = chats[0];
+            appSetting.currentChat = chats[0];
         }
     });
 
@@ -29,17 +45,17 @@
             messages: [],
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            model: appState.modelList[0].name || "qwen2.5",
+            model: appSetting.modelList[0].name || "qwen2.5",
         };
 
         const id = await db.chats.add(newChat);
         chats = await db.chats.orderBy("updatedAt").reverse().toArray();
-        appState.currentChat = chats[0];
-        inputRef.focus();
+        appSetting.currentChat = chats[0];
+        inputRef?.focus();
     }
 
     async function sendMessage() {
-        if (!message.trim() || !appState.currentChat || loading) return;
+        if (!message.trim() || !appSetting.currentChat || loading) return;
 
         const content = $state.snapshot(message).trim();
         const userMessage: Message = {
@@ -48,16 +64,16 @@
             timestamp: Date.now(),
         };
 
-        appState.currentChat.messages.push(userMessage);
-        appState.currentChat.updatedAt = Date.now();
+        appSetting.currentChat.messages.push(userMessage);
+        appSetting.currentChat.updatedAt = Date.now();
 
-        if (appState.currentChat.messages.length === 1) {
-            appState.currentChat.title = message.slice(0, 30);
+        if (appSetting.currentChat.messages.length === 1) {
+            appSetting.currentChat.title = message.slice(0, 30);
         }
 
         await db.chats.update(
-            appState.currentChat.id,
-            $state.snapshot(appState.currentChat),
+            appSetting.currentChat.id,
+            $state.snapshot(appSetting.currentChat),
         );
 
         loading = true;
@@ -65,7 +81,7 @@
 
         try {
             // 构建对话历史
-            const messages = appState.currentChat.messages.map((msg) => ({
+            const messages = appSetting.currentChat.messages.map((msg) => ({
                 role: msg.role,
                 content: msg.content,
             }));
@@ -78,7 +94,7 @@
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        model: appState.currentChat.model,
+                        model: appSetting.defaultModel?.name,
                         messages: messages, // 传递完整的对话历史
                         stream: false,
                     }),
@@ -93,11 +109,11 @@
                 timestamp: Date.now(),
             };
 
-            appState.currentChat.messages.push(assistantMessage);
-            appState.currentChat.updatedAt = Date.now();
+            appSetting.currentChat.messages.push(assistantMessage);
+            appSetting.currentChat.updatedAt = Date.now();
             await db.chats.update(
-                appState.currentChat.id,
-                $state.snapshot(appState.currentChat),
+                appSetting.currentChat.id,
+                $state.snapshot(appSetting.currentChat),
             );
         } catch (error) {
             console.error("Error:", error);
@@ -110,8 +126,8 @@
         if (chat.id) {
             await db.chats.delete(chat.id);
             chats = chats.filter((c) => c.id !== chat.id);
-            if (appState.currentChat?.id === chat.id) {
-                appState.currentChat = chats[0] || undefined;
+            if (appSetting.currentChat?.id === chat.id) {
+                appSetting.currentChat = chats[0] || undefined;
             }
         }
     }
@@ -144,6 +160,38 @@
             },
         };
     }
+
+    async function changeModel(model: ModelInfo) {
+        appSetting.defaultModel = model;
+        await saveSetting();
+    }
+
+    // 刷新模型
+    async function refreshModels() {
+        alertMessage.message = "Refreshing models...";
+        appSetting.modelList = await fetchModels();
+        if (
+            !appSetting.modelList.some(
+                (model) => model.name === appSetting.defaultModel?.name,
+            )
+        ) {
+            appSetting.defaultModel = appSetting.modelList[0];
+        }
+    }
+
+    async function changeUrl(url: string) {
+        appSetting.url = url;
+        await saveSetting();
+    }
+
+    async function saveSetting() {
+        const setting = $state.snapshot(appSetting);
+        await db.setting.put({
+            id: setting.id,
+            url: setting.url,
+            defaultModel: setting.defaultModel,
+        });
+    }
 </script>
 
 <div class="h-screen flex">
@@ -158,12 +206,12 @@
             {#each chats as chat}
                 <div
                     class="mb-2 p-2 cursor-pointer hover:bg-base-300 flex justify-between items-center rounded-2xl"
-                    class:bg-base-300={appState.currentChat?.id === chat.id}
-                    onclick={() => (appState.currentChat = chat)}
+                    class:bg-base-300={appSetting.currentChat?.id === chat.id}
+                    onclick={() => (appSetting.currentChat = chat)}
                     onkeydown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            appState.currentChat = chat;
+                            appSetting.currentChat = chat;
                         }
                     }}
                     role="button"
@@ -185,16 +233,64 @@
 
     <!-- Chat Area -->
     <div class="flex-1 flex flex-col bg-base-100">
-        {#if appState.currentChat}
+        <div
+            class="border-b border-base-300 p-4 flex items-center justify-between"
+        >
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
+                    <input
+                        type="url"
+                        class="input input-sm input-bordered bg-transparent w-52 text-sm opacity-70 focus:opacity-100 transition-opacity"
+                        placeholder="http://localhost:11434"
+                        value={appSetting.url}
+                        onchange={(e) => changeUrl(e.currentTarget.value)}
+                    />
+                </div>
+
+                <div class="dropdown">
+                    <button tabindex="0" class="btn btn-sm">
+                        {appSetting.defaultModel?.name}
+                        <i class="icon-[mdi--chevron-down]"></i>
+                    </button>
+                    <ul
+                        class="dropdown-content z-[1] menu p-2 shadow bg-base-200 rounded-box w-52 max-h-96 overflow-y-auto space-y-1"
+                    >
+                        {#each appSetting.modelList as model}
+                            <li>
+                                <button
+                                    class="w-full text-left rounded-xl text-base-content-300"
+                                    class:active={appSetting.defaultModel
+                                        ?.name === model.name}
+                                    onclick={() => changeModel(model)}
+                                >
+                                    {model.name}
+                                </button>
+                            </li>
+                        {/each}
+                    </ul>
+                </div>
+            </div>
+
+            <button
+                aria-label="Refresh Models"
+                class="btn btn-sm btn-ghost btn-circle"
+                onclick={refreshModels}
+                title="Refresh Models"
+            >
+                <i class="icon-[mdi--refresh]"></i>
+            </button>
+        </div>
+        {#if appSetting.currentChat}
             <div class="flex-1 p-4 overflow-y-auto" use:autoScroll>
-                {#each appState.currentChat.messages as message}
+                {#each appSetting.currentChat.messages as message}
                     <div
                         class="chat {message.role === 'user'
                             ? 'chat-end'
                             : 'chat-start'} mb-4"
                     >
                         <div
-                            class="chat-bubble {message.role === 'user'
+                            class="chat-bubble prose dark:prose-invert {message.role ===
+                            'user'
                                 ? 'chat-bubble-primary'
                                 : ''}"
                         >
@@ -240,3 +336,5 @@
         {/if}
     </div>
 </div>
+
+<Alert />

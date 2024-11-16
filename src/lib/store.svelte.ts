@@ -1,11 +1,11 @@
-import type { Chat, ModelInfo } from "./types";
+import type { AppSetting } from "./types";
 
-export let appState: {
-  url: string;
-  currentChat: Chat | undefined;
-  modelList: ModelInfo[];
-} = $state({
+export let appSetting: AppSetting = $state({
+  id: "setting",
   url: "http://localhost:11434",
   currentChat: undefined,
   modelList: [],
+  defaultModel: undefined,
 });
+
+export let alertMessage: { message: string } = $state({ message: "" });
