@@ -1,4 +1,4 @@
-import type { AppSetting } from "./types";
+import { Theme, type AppSetting } from "./types";
 
 export let appSetting: AppSetting = $state({
   id: "setting",
@@ -6,6 +6,7 @@ export let appSetting: AppSetting = $state({
   currentChat: undefined,
   modelList: [],
   defaultModel: undefined,
+  theme: Theme.Media,
 });
 
 export let alertMessage: { message: string } = $state({ message: "" });

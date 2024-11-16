@@ -35,10 +35,21 @@ export interface AppSetting {
   defaultModel: ModelInfo | undefined;
   currentChat: Chat | undefined;
   modelList: ModelInfo[];
+  theme: Theme;
 }
 
 export interface AppSettingDB {
   id: string;
   url: string;
   defaultModel: ModelInfo | undefined;
+  theme: Theme;
+}
+
+export enum Theme {
+  Media = "media",
+  Light = "light",
+  Dark = "dark",
+  Black = "black",
+  Tan = "tan",
+  Pink = "pink",
 }

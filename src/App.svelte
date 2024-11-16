@@ -1,7 +1,12 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { db } from "./lib/db";
-    import type { Chat, Message, ModelInfo } from "./lib/types";
+    import {
+        Theme,
+        type Chat,
+        type Message,
+        type ModelInfo,
+    } from "./lib/types";
     import { alertMessage, appSetting } from "./lib/store.svelte";
     import { marked } from "marked";
     import DOMPurify from "dompurify";
@@ -20,6 +25,11 @@
             appSetting.defaultModel =
                 setting.defaultModel ?? appSetting.defaultModel;
             appSetting.url = setting.url ?? appSetting.url;
+            appSetting.theme = setting.theme ?? appSetting.theme;
+            document.documentElement.setAttribute(
+                "data-theme",
+                appSetting.theme,
+            );
         }
         // 获取模型列表
         appSetting.modelList = await fetchModels();
@@ -190,7 +200,14 @@
             id: setting.id,
             url: setting.url,
             defaultModel: setting.defaultModel,
+            theme: setting.theme,
         });
+    }
+
+    async function saveTheme(theme: Theme) {
+        appSetting.theme = theme;
+        document.documentElement.setAttribute("data-theme", appSetting.theme);
+        await saveSetting();
     }
 </script>
 
@@ -258,7 +275,7 @@
                         {#each appSetting.modelList as model}
                             <li>
                                 <button
-                                    class="w-full text-left rounded-xl text-base-content-300"
+                                    class="w-full text-left rounded-xl"
                                     class:active={appSetting.defaultModel
                                         ?.name === model.name}
                                     onclick={() => changeModel(model)}
@@ -266,6 +283,20 @@
                                     {model.name}
                                 </button>
                             </li>
+                        {/each}
+                    </ul>
+                </div>
+
+                <div class="dropdown">
+                    <button tabindex="0" class="btn btn-sm">
+                        {appSetting.theme}
+                        <i class="icon-[mdi--chevron-down]"></i>
+                    </button>
+                    <ul
+                        class="dropdown-content z-[1] menu p-2 shadow bg-base-200 rounded-box w-52 max-h-96 overflow-y-auto space-y-1"
+                    >
+                        {#each Object.values(Theme) as theme}
+                            {@render li(theme)}
                         {/each}
                     </ul>
                 </div>
@@ -338,3 +369,15 @@
 </div>
 
 <Alert />
+
+{#snippet li(value: Theme)}
+    <li>
+        <button
+            class="w-full text-left rounded-xl"
+            class:active={appSetting.theme === value}
+            onclick={() => saveTheme(value)}
+        >
+            {value}
+        </button>
+    </li>
+{/snippet}
