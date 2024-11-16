@@ -10,7 +10,7 @@
     import { alertMessage, appSetting } from "./lib/store.svelte";
     import { marked } from "marked";
     import DOMPurify from "dompurify";
-    import { fetchModels } from "./lib/fetch";
+    import { fetchModels, setupOllamaCors } from "./lib/fetch";
     import Alert from "./lib/Alert.svelte";
 
     let message = $state("");
@@ -31,6 +31,8 @@
                 appSetting.theme,
             );
         }
+        // 解决在 chrome 扩展中的 cors 问题
+        await setupOllamaCors();
         // 获取模型列表
         appSetting.modelList = await fetchModels();
         // 获取模型列表之后，再检查一下默认模型是否存在
@@ -192,6 +194,7 @@
     async function changeUrl(url: string) {
         appSetting.url = url;
         await saveSetting();
+        await setupOllamaCors();
     }
 
     async function saveSetting() {
