@@ -345,8 +345,10 @@
     <div class="flex-1 overflow-y-auto">
       {#each chats as chat}
         <div
-          class="mb-2 flex cursor-pointer items-center justify-between rounded-2xl p-2 hover:bg-base-300"
-          class:bg-base-300={appSetting.currentChat?.id === chat.id}
+          class="mb-2 flex cursor-pointer items-center justify-between rounded-2xl p-2 hover:bg-primary/10 {appSetting
+            .currentChat?.id === chat.id
+            ? 'bg-primary/20'
+            : ''}"
           onclick={() => (appSetting.currentChat = chat)}
           onkeydown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
