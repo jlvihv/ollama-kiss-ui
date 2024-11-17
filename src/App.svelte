@@ -356,7 +356,7 @@
           }}
           role="button"
           tabindex="0"
-          aria-label={`选择对话：${chat.title}`}
+          aria-label={`Select chat: ${chat.title}`}
         >
           <div class="flex-1 truncate">{chat.title}</div>
           <button
