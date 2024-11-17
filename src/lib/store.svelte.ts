@@ -9,4 +9,9 @@ export let appSetting: AppSetting = $state({
   theme: Theme.Media,
 });
 
-export let alertMessage: { message: string } = $state({ message: "" });
+export type AlertType = "info" | "error";
+
+export let alertMessage: { message: string; type: AlertType } = $state({
+  message: "",
+  type: "info",
+});

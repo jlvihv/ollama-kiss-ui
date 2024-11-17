@@ -39,6 +39,7 @@ export async function fetchModels(): Promise<ModelInfo[]> {
     return data.models;
   } catch (error) {
     alertMessage.message = "Error fetching models";
+    alertMessage.type = "error";
     console.error("Error fetching models:", error);
     return [];
   }

@@ -50,6 +50,4 @@ export enum Theme {
   Light = "light",
   Dark = "dark",
   Black = "black",
-  Tan = "tan",
-  Pink = "pink",
 }
