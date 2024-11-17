@@ -1,7 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { db } from "./lib/db";
-  import { Theme, type Chat, type Message, type ModelInfo } from "./lib/types";
+  import {
+    MAX_CONTEXT_MESSAGES,
+    Theme,
+    type Chat,
+    type Message,
+    type ModelInfo,
+  } from "./lib/types";
   import { alertMessage, appSetting } from "./lib/store.svelte";
   import { marked } from "marked";
   import DOMPurify from "dompurify";
@@ -13,6 +19,8 @@
   let chats: Chat[] = $state([]);
   let loading = $state(false);
   let inputRef: HTMLInputElement | undefined = $state();
+  let abortController: AbortController | null = $state(null);
+  let debounceTimer: number | null = $state(null);
 
   // 初始化
   onMount(async () => {
@@ -107,54 +115,84 @@
   }
 
   async function sendToLlm() {
-    if (!appSetting.currentChat) return;
+    if (!appSetting.currentChat || !appSetting.defaultModel) return;
+
     loading = true;
+    abortController = new AbortController();
 
     try {
-      const messages = appSetting.currentChat.messages.map(
-        ({ role, content }) => ({
-          role,
-          content,
-        }),
-      );
+      // 获取最近的消息作为上下文
+      const recentMessages =
+        appSetting.currentChat.messages.slice(-MAX_CONTEXT_MESSAGES);
 
       const response = await fetch(`${appSetting.url}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          model: appSetting.defaultModel?.name,
-          messages,
-          stream: false,
+          model: appSetting.defaultModel.name,
+          messages: recentMessages,
+          stream: true,
         }),
+        signal: abortController.signal,
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      await addAssistantMessage(data.message.content);
+      // 创建一个空的助手消息
+      await addAssistantMessage("");
+      const currentMessage = appSetting.currentChat.messages.at(-1);
+      if (!currentMessage) return;
+
+      const reader = response.body?.getReader();
+      if (!reader) return;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = new TextDecoder().decode(value);
+        const lines = text.split("\n").filter(Boolean);
+
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line);
+            if (json.message?.content) {
+              currentMessage.content += json.message.content;
+              debounceSaveChat();
+            }
+          } catch (e) {
+            console.error("Failed to parse JSON:", e);
+          }
+        }
+      }
+
+      await saveCurrentChat();
     } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        // 用户取消了请求，不需要显示错误
+        return;
+      }
       alertMessage.message = `Failed to send message: ${getErrorMessage(error)}`;
       alertMessage.type = "error";
       console.error("Error:", error);
     } finally {
       loading = false;
+      abortController = null;
     }
   }
 
   async function addAssistantMessage(content: string) {
     if (!appSetting.currentChat) return;
-
-    const assistantMessage: Message = {
+    appSetting.currentChat.messages.push({
       role: "assistant",
       content,
       timestamp: Date.now(),
-    };
-
-    appSetting.currentChat.messages.push(assistantMessage);
-    appSetting.currentChat.updatedAt = Date.now();
-    await updateChat();
+    }),
+      await saveCurrentChat();
   }
 
   async function updateChat() {
@@ -163,6 +201,30 @@
       appSetting.currentChat.id,
       $state.snapshot(appSetting.currentChat),
     );
+  }
+
+  async function saveCurrentChat() {
+    if (!appSetting.currentChat) return;
+    await db.chats.update(
+      appSetting.currentChat.id,
+      $state.snapshot(appSetting.currentChat),
+    );
+  }
+
+  function debounceSaveChat() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(async () => {
+      await saveCurrentChat();
+      debounceTimer = null;
+    }, 300) as unknown as number;
+  }
+
+  function stopGeneration() {
+    if (abortController) {
+      abortController.abort();
+    }
   }
 
   // 设置相关功能
@@ -395,32 +457,35 @@
             </div>
           </div>
         {/each}
-        {#if loading}
-          <div class="chat chat-start mb-4">
-            <div class="chat-bubble">
-              <span class="loading loading-dots loading-sm"></span>
-            </div>
-          </div>
-        {/if}
       </div>
 
       <div class="flex w-full gap-4 border-t border-base-300 p-4">
         <input
           type="text"
+          class="input input-bordered flex-1 bg-transparent"
+          placeholder="Type a message..."
           bind:value={message}
           bind:this={inputRef}
-          placeholder="Type your message..."
-          class="input input-bordered flex-1"
-          onkeydown={(e) => e.key === "Enter" && sendMessage()}
+          onkeydown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (!loading) {
+                sendMessage();
+              }
+            }
+          }}
         />
         <button
-          type="submit"
-          class="btn btn-primary"
-          disabled={loading}
-          onclick={sendMessage}
+          class="btn min-w-[6rem] border {loading
+            ? 'btn-error hover:bg-error/90'
+            : 'btn-primary'}"
+          onclick={loading ? stopGeneration : sendMessage}
+          disabled={!message && !loading}
+          aria-label={loading ? "Stop generation" : "Send message"}
+          title={loading ? "Stop generation" : "Send message"}
         >
-          <i class="icon-[mdi--send]"></i>
-          Send
+          <i class="icon-[mdi--{loading ? 'stop' : 'send'}]"></i>
+          <span class="w-10">{loading ? "Stop" : "Send"}</span>
         </button>
       </div>
     {:else}

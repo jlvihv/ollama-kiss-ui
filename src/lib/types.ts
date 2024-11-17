@@ -51,3 +51,5 @@ export enum Theme {
   Dark = "dark",
   Black = "black",
 }
+
+export const MAX_CONTEXT_MESSAGES = 10; // 最大保留的上下文消息数量
