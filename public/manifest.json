@@ -1,12 +1,12 @@
 {
   "name": "Ollama KISS UI",
   "description": "A simple, stupid UI for Ollama. Keep It Simple, Stupid (KISS).",
-  "version": "0.1",
+  "version": "0.2",
   "manifest_version": 3,
   "action": {
     "default_icon": "kiss.png"
   },
-  "permissions": ["storage", "declarativeNetRequest"],
+  "permissions": ["declarativeNetRequest"],
   "background": {
     "service_worker": "background.js"
   },
