@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import hljs from "highlight.js";
+  import "highlight.js/styles/atom-one-dark.css";
+  import { onDestroy, onMount } from "svelte";
   import { db } from "./lib/db";
   import {
     MAX_CONTEXT_MESSAGES,
@@ -13,14 +15,16 @@
   import DOMPurify from "dompurify";
   import { fetchModels, setupOllamaCors } from "./lib/fetch";
   import Alert from "./lib/Alert.svelte";
+  import ClipboardJS from "clipboard";
 
   // 状态管理
   let message = $state("");
   let chats: Chat[] = $state([]);
   let loading = $state(false);
-  let inputRef: HTMLInputElement | undefined = $state();
+  let inputRef: HTMLTextAreaElement | undefined = $state();
   let abortController: AbortController | null = $state(null);
   let debounceTimer: number | null = $state(null);
+  let clipboard: ClipboardJS | undefined = $state();
 
   // 初始化
   onMount(async () => {
@@ -32,11 +36,18 @@
     }
   });
 
+  onDestroy(() => {
+    if (clipboard) {
+      clipboard.destroy();
+    }
+  });
+
   async function initializeApp() {
     await loadSettings();
     await setupOllamaCors();
     await loadModels();
     await loadChats();
+    initClipboard();
   }
 
   async function loadSettings() {
@@ -68,6 +79,45 @@
     } else {
       appSetting.currentChat = chats[0];
     }
+  }
+
+  function initClipboard() {
+    // 初始化 ClipboardJS
+    clipboard = new ClipboardJS(".copy-button", {
+      text: function (trigger) {
+        // 获取对应的代码内容
+        const wrapper = trigger.closest(".code-block-wrapper");
+        const code = wrapper?.querySelector("code");
+        return code?.textContent || "";
+      },
+    });
+
+    // 复制成功的反馈
+    clipboard.on("success", (e) => {
+      const button = e.trigger as HTMLButtonElement;
+      const originalText = button.textContent;
+      button.textContent = "Copied!";
+      button.disabled = true;
+
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.disabled = false;
+      }, 2000);
+
+      // 清除选中状态
+      e.clearSelection();
+    });
+
+    // 复制失败的处理
+    clipboard.on("error", (e) => {
+      const button = e.trigger as HTMLButtonElement;
+      button.textContent = "Failed!";
+      console.error("Copy failed:", e.action);
+
+      setTimeout(() => {
+        button.textContent = "Copy";
+      }, 2000);
+    });
   }
 
   // 聊天相关功能
@@ -301,7 +351,26 @@
   }
 
   function renderMarkdown(content: string) {
+    const renderer = new marked.Renderer();
+
+    renderer.code = ({ text: code, lang: language }) => {
+      const highlightedCode = language
+        ? hljs.highlight(code, { language, ignoreIllegals: true }).value
+        : hljs.highlightAuto(code).value;
+
+      return `
+          <div class="code-block-wrapper">
+            <div class="code-header">
+              <span class="code-language">${language || "text"}</span>
+              <button class="copy-button">Copy</button>
+            </div>
+            <pre><code class="hljs language-${language || "text"}">${highlightedCode}</code></pre>
+          </div>
+        `;
+    };
+
     const rawHtml = marked.parse(content, {
+      renderer,
       breaks: true,
       gfm: true,
       async: false,
@@ -310,11 +379,28 @@
   }
 
   function autoScroll(node: HTMLElement) {
-    const observer = new MutationObserver(() => {
-      node.scrollTop = node.scrollHeight;
+    const observer = new MutationObserver((mutations) => {
+      const isCopyOperation = mutations.some((mutation) => {
+        if (mutation.target.nodeType === Node.ELEMENT_NODE) {
+          const element = mutation.target as HTMLElement;
+          return (
+            element.closest(".copy-button") ||
+            element.classList.contains("copy-button")
+          );
+        }
+        return false;
+      });
+
+      if (!isCopyOperation) {
+        node.scrollTop = node.scrollHeight;
+      }
     });
 
-    observer.observe(node, { childList: true, subtree: true });
+    observer.observe(node, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
 
     return {
       destroy() {
@@ -450,9 +536,9 @@
               : 'chat-start'} mb-4"
           >
             <div
-              class="chat-bubble prose dark:prose-invert {message.role ===
+              class="chat-bubble prose break-words break-all dark:prose-invert {message.role ===
               'user'
-                ? 'chat-bubble-primary [&>*]:text-white'
+                ? 'bg-blue-600/80 [&>*]:text-slate-50'
                 : ''}"
             >
               {@html renderMarkdown(message.content)}
@@ -462,9 +548,10 @@
       </div>
 
       <div class="flex w-full gap-4 border-t border-base-300 p-4">
-        <input
-          type="text"
-          class="input input-bordered flex-1 bg-transparent"
+        <textarea
+          class="textarea textarea-bordered h-8 flex-1 resize-none bg-transparent {message
+            ? 'leading-tight'
+            : ''}"
           placeholder="Type a message..."
           bind:value={message}
           bind:this={inputRef}
@@ -476,7 +563,7 @@
               }
             }
           }}
-        />
+        ></textarea>
         <button
           class="btn min-w-[6rem] border {loading
             ? 'btn-error hover:bg-error/90'
@@ -486,7 +573,7 @@
           aria-label={loading ? "Stop generation" : "Send message"}
           title={loading ? "Stop generation" : "Send message"}
         >
-          <i class="icon-[mdi--{loading ? 'stop' : 'send'}]"></i>
+          <i class={loading ? "icon-[mdi--stop]" : "icon-[mdi--send]"}></i>
           <span class="w-10">{loading ? "Stop" : "Send"}</span>
         </button>
       </div>
@@ -499,3 +586,49 @@
 </div>
 
 <Alert />
+
+<style lang="postcss">
+  :global {
+    .code-block-wrapper {
+      @apply relative my-4 rounded-xl bg-base-200;
+    }
+
+    .code-header {
+      @apply flex items-center justify-between px-4 py-1.5;
+      @apply rounded-t-xl;
+      @apply border-b border-white/10;
+      @apply bg-primary/10;
+    }
+
+    .code-language {
+      @apply text-sm text-base-content;
+    }
+
+    .copy-button {
+      @apply bg-transparent;
+      @apply border border-primary/60;
+      @apply text-sm text-base-content/60;
+      @apply px-3 py-1;
+      @apply rounded-lg;
+      @apply cursor-pointer;
+      @apply transition-all duration-200;
+      @apply leading-none;
+    }
+
+    .copy-button:hover {
+      @apply bg-white/10;
+    }
+
+    .copy-button.copied {
+      @apply border-[#98c379] bg-[#98c379] text-[#282c34];
+    }
+
+    pre {
+      @apply m-0 bg-transparent p-4 !important;
+    }
+
+    code {
+      @apply bg-transparent p-0 text-[#abb2bf] !important;
+    }
+  }
+</style>

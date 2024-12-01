@@ -3,58 +3,64 @@
 @import "tailwindcss/utilities";
 
 html {
-  scrollbar-gutter: stable;
+    scrollbar-gutter: stable;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
-    "Microsoft YaHei", "Helvetica Neue", "Noto Sans", "Segoe UI", sans-serif;
-  font-display: swap;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC",
+        "Microsoft YaHei", "Helvetica Neue", "Noto Sans", "Segoe UI", sans-serif;
+    font-display: swap;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 html,
 body {
-  height: 100dvh;
-  margin: 0;
-  padding: 0;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
 }
 
 @supports not (height: 100dvh) {
-  html,
-  body {
-    height: 100vh;
-  }
+
+    html,
+    body {
+        height: 100vh;
+    }
 }
 
 /* main 作为主容器 */
 main {
-  height: 100%;
-  width: 100%;
-  overflow-y: auto; /* 内容滚动 */
-  -webkit-overflow-scrolling: touch; /* iOS 顺滑滚动 */
-  padding-top: env(safe-area-inset-top); /* 适配刘海屏等 */
-  /* padding-bottom: env(safe-area-inset-bottom); */
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    /* 内容滚动 */
+    -webkit-overflow-scrolling: touch;
+    /* iOS 顺滑滚动 */
+    padding-top: env(safe-area-inset-top);
+    /* 适配刘海屏等 */
+    /* padding-bottom: env(safe-area-inset-bottom); */
 }
 
 /* 隐藏滚动条但保留功能 */
 .scrollbar-hide {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+    display: none;
+    /* Chrome, Safari and Opera */
 }
 
 dialog::backdrop {
-  background-color: rgba(0, 0, 0, 0.5);
-  /* backdrop-filter: blur(6px); */
+    background-color: rgba(0, 0, 0, 0.5);
+    /* backdrop-filter: blur(6px); */
 }
 
 /* 禁用 daisyui 的 btn 的 scale 变换 */
 .btn {
-  transform: none !important;
-  transition-property: color, background-color, border-color, opacity;
+    transform: none !important;
+    transition-property: color, background-color, border-color, opacity;
 }
