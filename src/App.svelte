@@ -423,7 +423,10 @@
 <div class="flex h-screen">
   <!-- Sidebar -->
   <div class="flex w-64 flex-col bg-base-200 p-4">
-    <button class="btn btn-primary mb-4 w-full" onclick={createNewChat}>
+    <button
+      class="btn mb-4 w-full bg-blue-600/80 hover:bg-blue-600"
+      onclick={createNewChat}
+    >
       <i class="icon-[mdi--plus]"></i>
       New Chat
     </button>
@@ -567,7 +570,7 @@
         <button
           class="btn min-w-[6rem] border {loading
             ? 'btn-error hover:bg-error/90'
-            : 'btn-primary'}"
+            : 'bg-blue-600/80 hover:bg-blue-600'}"
           onclick={loading ? stopGeneration : sendMessage}
           disabled={!message && !loading}
           aria-label={loading ? "Stop generation" : "Send message"}
