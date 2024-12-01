@@ -23,6 +23,9 @@ While there are many excellent Ollama UIs available, most of them come with abun
 - Model switching
 - Chat history
 - Markdown support (including code blocks)
+- Code syntax highlighting with highlight.js
+- One-click code copying
+- Export chat history as JSON
 - Dark/Light theme
 - Server URL configuration
 - That's it!
@@ -89,6 +92,12 @@ When accessing through GitHub Pages, you'll need to handle CORS. Here are severa
 3. Select a model
 4. Start chatting!
 
+### Code Features
+
+- Syntax highlighting automatically applies to code blocks using highlight.js
+- Click the copy button in the top-right corner of any code block to copy the code
+- Supports all major programming languages
+
 ## Development
 
 ```bash
@@ -120,8 +129,10 @@ Built with:
 - Svelte
 - Tailwind CSS
 - DaisyUI
+- Dexie
 - Marked
 - DOMPurify
+- highlight.js (syntax highlighting)
 
 ## Contributing
 
