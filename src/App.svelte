@@ -24,7 +24,8 @@
   let inputRef: HTMLTextAreaElement | undefined = $state();
   let abortController: AbortController | null = $state(null);
   let debounceTimer: number | null = $state(null);
-  let clipboard: ClipboardJS | undefined = $state();
+  let codeClipboard: ClipboardJS | undefined = $state();
+  let messageClipboard: ClipboardJS | undefined = $state();
 
   // 初始化
   onMount(async () => {
@@ -37,8 +38,11 @@
   });
 
   onDestroy(() => {
-    if (clipboard) {
-      clipboard.destroy();
+    if (codeClipboard) {
+      codeClipboard.destroy();
+    }
+    if (messageClipboard) {
+      messageClipboard.destroy();
     }
   });
 
@@ -82,42 +86,62 @@
   }
 
   function initClipboard() {
-    // 初始化 ClipboardJS
-    clipboard = new ClipboardJS(".copy-button", {
+    // 代码块的复制
+    codeClipboard = new ClipboardJS(".copy-button", {
       text: function (trigger) {
-        // 获取对应的代码内容
         const wrapper = trigger.closest(".code-block-wrapper");
         const code = wrapper?.querySelector("code");
         return code?.textContent || "";
       },
     });
 
-    // 复制成功的反馈
-    clipboard.on("success", (e) => {
+    // 整条消息的复制
+    messageClipboard = new ClipboardJS(".message-copy-button", {
+      text: function (trigger) {
+        const chatBubble = trigger.closest(".chat");
+        return chatBubble?.getAttribute("data-original-content") || "";
+      },
+    });
+
+    // 统一的成功处理函数
+    function handleSuccess(e: ClipboardJS.Event) {
       const button = e.trigger as HTMLButtonElement;
-      const originalText = button.textContent;
+      const originalText = button.textContent || "";
+      // 保存原始文字
+      button.dataset.originalText = originalText;
       button.textContent = "Copied!";
       button.disabled = true;
+
+      setTimeout(() => {
+        button.textContent = button.dataset.originalText || originalText;
+        button.disabled = false;
+      }, 2000);
+
+      e.clearSelection();
+    }
+
+    // 统一的错误处理函数
+    function handleError(e: ClipboardJS.Event) {
+      const button = e.trigger as HTMLButtonElement;
+      const originalText =
+        button.dataset.originalText || button.textContent || "";
+      button.textContent = "Failed!";
+      button.disabled = true;
+      console.error("Copy failed:", e);
 
       setTimeout(() => {
         button.textContent = originalText;
         button.disabled = false;
       }, 2000);
+    }
 
-      // 清除选中状态
-      e.clearSelection();
-    });
+    // 绑定事件处理
+    codeClipboard.on("success", handleSuccess);
+    codeClipboard.on("error", handleError);
+    messageClipboard.on("success", handleSuccess);
+    messageClipboard.on("error", handleError);
 
-    // 复制失败的处理
-    clipboard.on("error", (e) => {
-      const button = e.trigger as HTMLButtonElement;
-      button.textContent = "Failed!";
-      console.error("Copy failed:", e.action);
-
-      setTimeout(() => {
-        button.textContent = "Copy";
-      }, 2000);
-    });
+    return { codeClipboard, messageClipboard };
   }
 
   // 聊天相关功能
@@ -385,7 +409,9 @@
           const element = mutation.target as HTMLElement;
           return (
             element.closest(".copy-button") ||
-            element.classList.contains("copy-button")
+            element.classList.contains("copy-button") ||
+            element.closest(".message-copy-button") ||
+            element.classList.contains("message-copy-button")
           );
         }
         return false;
@@ -417,6 +443,18 @@
       defaultModel: setting.defaultModel,
       theme: setting.theme,
     });
+  }
+
+  // 导出数据
+  async function exportData() {
+    const data = await db.chats.toArray();
+    const blob = new Blob([JSON.stringify(data)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ollama-kiss-ui-chat-data.json";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 </script>
 
@@ -455,10 +493,16 @@
             class="btn btn-circle btn-ghost btn-xs"
             onclick={() => deleteChat(chat)}
           >
-            <i class="icon-[mdi--delete]"></i>
+            <i class="icon-[mdi--delete] bg-slate-500"></i>
           </button>
         </div>
       {/each}
+    </div>
+    <div>
+      <button class="btn btn-ghost mt-4 w-full" onclick={exportData}>
+        <i class="icon-[mdi--export]"></i>
+        Export Chat Data</button
+      >
     </div>
   </div>
 
@@ -534,10 +578,18 @@
       <div class="flex-1 overflow-y-auto p-4" use:autoScroll>
         {#each appSetting.currentChat.messages as message}
           <div
-            class="chat {message.role === 'user'
+            data-original-content={message.content}
+            class="group chat relative {message.role === 'user'
               ? 'chat-end'
               : 'chat-start'} mb-4"
           >
+            {#if message.content}
+              <button
+                class="message-copy-button {message.role === 'user'
+                  ? 'message-copy-button-end'
+                  : 'message-copy-button-start'}">Copy Message</button
+              >
+            {/if}
             <div
               class="chat-bubble prose break-words break-all dark:prose-invert {message.role ===
               'user'
@@ -624,6 +676,19 @@
 
     .copy-button.copied {
       @apply border-[#98c379] bg-[#98c379] text-[#282c34];
+    }
+
+    .message-copy-button {
+      @apply copy-button;
+      @apply absolute opacity-0 group-hover:opacity-100;
+    }
+
+    .message-copy-button-start {
+      @apply -top-6 left-4;
+    }
+
+    .message-copy-button-end {
+      @apply -bottom-6 right-3;
     }
 
     pre {
