@@ -1,21 +1,21 @@
 <script lang="ts">
+  import ClipboardJS from "clipboard";
+  import DOMPurify from "dompurify";
   import hljs from "highlight.js";
   import "highlight.js/styles/atom-one-dark.css";
-  import { onDestroy, onMount } from "svelte";
-  import { db } from "./lib/db";
-  import {
-    MAX_CONTEXT_MESSAGES,
-    Theme,
-    type Chat,
-    type Message,
-    type ModelInfo,
-  } from "./lib/types";
-  import { alertMessage, appSetting } from "./lib/store.svelte";
   import { marked } from "marked";
-  import DOMPurify from "dompurify";
-  import { fetchModels, setupOllamaCors } from "./lib/fetch";
+  import { onDestroy, onMount } from "svelte";
   import Alert from "./lib/Alert.svelte";
-  import ClipboardJS from "clipboard";
+  import { db } from "./lib/db";
+  import { fetchModels, setupOllamaCors } from "./lib/fetch";
+  import { alertMessage, appSetting } from "./lib/store.svelte";
+  import {
+      MAX_CONTEXT_MESSAGES,
+      Theme,
+      type Chat,
+      type Message,
+      type ModelInfo,
+  } from "./lib/types";
 
   // 状态管理
   let message = $state("");
@@ -199,7 +199,7 @@
       const recentMessages =
         appSetting.currentChat.messages.slice(-MAX_CONTEXT_MESSAGES);
       
-      // 过滤掉历史消息中的推理思考部分，创建新的消息数组发送给LLM
+      // 过滤掉历史消息中的推理思考部分，创建新的消息数组发送给 LLM
       const messagesForLLM = recentMessages.map(msg => ({
         role: msg.role,
         content: msg.content // 只发送内容，不包含推理思考部分
