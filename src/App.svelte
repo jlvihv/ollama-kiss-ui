@@ -198,6 +198,12 @@
       // 获取最近的消息作为上下文
       const recentMessages =
         appSetting.currentChat.messages.slice(-MAX_CONTEXT_MESSAGES);
+      
+      // 过滤掉历史消息中的推理思考部分，创建新的消息数组发送给LLM
+      const messagesForLLM = recentMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content // 只发送内容，不包含推理思考部分
+      }));
 
       const response = await fetch(`${appSetting.url}/api/chat`, {
         method: "POST",
@@ -206,7 +212,7 @@
         },
         body: JSON.stringify({
           model: appSetting.defaultModel.name,
-          messages: recentMessages,
+          messages: messagesForLLM,
           stream: true,
         }),
         signal: abortController.signal,
@@ -217,12 +223,14 @@
       }
 
       // 创建一个空的助手消息
-      await addAssistantMessage("");
+      await addAssistantMessage("", "");
       const currentMessage = appSetting.currentChat.messages.at(-1);
       if (!currentMessage) return;
 
       const reader = response.body?.getReader();
       if (!reader) return;
+
+      let fullContent = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -235,13 +243,35 @@
           try {
             const json = JSON.parse(line);
             if (json.message?.content) {
-              currentMessage.content += json.message.content;
+              fullContent += json.message.content;
+              
+              // 检查是否包含完整的思考标签
+              const thinkRegex = /<think>([\s\S]*?)<\/think>/;
+              const match = fullContent.match(thinkRegex);
+              
+              if (match) {
+                // 提取思考内容
+                currentMessage.thinking = match[1];
+                // 移除思考标签及其内容，保留实际回复
+                currentMessage.content = fullContent.replace(thinkRegex, "");
+              } else {
+                // 暂时保存完整内容，等待完整的思考标签
+                currentMessage.content = fullContent;
+              }
+              
               debounceSaveChat();
             }
           } catch (e) {
             console.error("Failed to parse JSON:", e);
           }
         }
+      }
+
+      // 最终处理，确保正确分离思考内容和实际回复
+      const finalThinkMatch = fullContent.match(/<think>([\s\S]*?)<\/think>/);
+      if (finalThinkMatch) {
+        currentMessage.thinking = finalThinkMatch[1];
+        currentMessage.content = fullContent.replace(/<think>[\s\S]*?<\/think>/, "");
       }
 
       await saveCurrentChat();
@@ -259,12 +289,13 @@
     }
   }
 
-  async function addAssistantMessage(content: string) {
+  async function addAssistantMessage(content: string, thinking: string = "") {
     if (!appSetting.currentChat) return;
     appSetting.currentChat.messages.push({
       role: "assistant",
       content,
       timestamp: Date.now(),
+      thinking,
     }),
       await saveCurrentChat();
   }
@@ -598,6 +629,11 @@
             >
               {@html renderMarkdown(message.content)}
             </div>
+            {#if message.thinking}
+              <div class="chat-bubble prose break-words break-all dark:prose-invert bg-blue-600/80 [&>*]:text-slate-50">
+                <p>Thinking: {@html renderMarkdown(message.thinking)}</p>
+              </div>
+            {/if}
           </div>
         {/each}
       </div>

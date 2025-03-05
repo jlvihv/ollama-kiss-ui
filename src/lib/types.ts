@@ -2,6 +2,7 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  thinking?: string; // 存储推理模型的思考过程
 }
 
 export interface Chat {
